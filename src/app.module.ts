@@ -11,9 +11,9 @@ import { EventsModule } from './events/events.module';
   imports: [
     GameModule,
     // EventsGateway,
-    MongooseModule.forRoot(
-      'mongodb+srv://fdwsknfkwefkwefs:asd123@cluster1.9dedabq.mongodb.net/?retryWrites=true&w=majority',
-    ),
+    // MongooseModule.forRoot(
+    // '',
+    // ),
     EventsModule,
   ],
   controllers: [AppController],
