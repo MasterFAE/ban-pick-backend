@@ -8,6 +8,8 @@ This is a backend application for a competitive game lobby system, designed for 
 - Selection phase: Allows players to select characters for their team.
 - Real-time updates: Provides real-time updates to all connected players, reflecting the current state of the lobby.
 
+## Supported Games
+
 - League of Legends - Champion Select & Ban System
 
   Team A starts with a ban and when Team A and Team B both have 3 bans, first pick phase starts.
@@ -22,11 +24,11 @@ This is a backend application for a competitive game lobby system, designed for 
 
   Source: [TCL - Turkish Championship League](https://liquipedia.net/leagueoflegends/TCL)
 
-  - Valorant - Map Select & Ban System
-    WILL BE AVAILABLE SOON
+- Valorant - Map Select & Ban System
+  WILL BE AVAILABLE SOON
 
-  - Counter-Strike: Global Offensive - Map Select & Ban System
-    WILL BE AVAILABLE SOON
+- Counter-Strike: Global Offensive - Map Select & Ban System
+  WILL BE AVAILABLE SOON
 
 ## Acknowledgements
 
