@@ -67,16 +67,14 @@ export class EventsGateway
     payload: {
       id: string;
       userName: string;
+      game: string;
       name: string;
-      teamSize: number;
       map: string;
       mode: string;
-      pickSize: number;
-      banSize: number;
       password: string;
     },
   ) {
-    let lobby = {
+    let lobby: any = {
       ...payload,
       teamA: [{ id: client.id, username: payload.userName }],
       teamB: [],
@@ -92,6 +90,32 @@ export class EventsGateway
       turnStartedAt: null,
       turnEndsAt: null,
     };
+
+    switch (payload.game) {
+      case 'League of Legends':
+        lobby.teamSize = 5;
+        lobby.pickSize = 5;
+        lobby.banSize = 5;
+        break;
+
+      case 'Counter Strike: Global Offensive':
+        lobby.teamSize = 5;
+        lobby.pickSize = 5;
+        lobby.banSize = 2;
+        break;
+
+      case 'Valorant':
+        lobby.teamSize = 5;
+        lobby.pickSize = 5;
+        lobby.banSize = 2;
+        break;
+
+      default:
+        lobby.teamSize = 5;
+        lobby.pickSize = 5;
+        lobby.banSize = 5;
+        break;
+    }
 
     this.lobbies.push(lobby);
     client.join(payload.id);
@@ -193,14 +217,14 @@ export class EventsGateway
     }
 
     // Check if all bans are done
-    if (
-      lobby.banSize * 2 <= lobby.bannedItems.length ||
-      lobby.phase !== 'ban'
-    ) {
+    if (lobby.banSize * 2 <= lobby.bannedItems.length) {
       client.emit('error', 'All bans are done');
       return;
     }
-
+    if (lobby.phase !== 'ban') {
+      client.emit('error', 'Ban phase is over');
+      return;
+    }
     lobby = this.switchTurn(lobby);
     lobby.bannedItems.push(payload.item);
 
@@ -208,12 +232,20 @@ export class EventsGateway
     this.io.to(payload.id).emit('banItem', payload.item);
 
     // Check if all bans are done and switch to pick phase
-    if (lobby.banSize * 2 === lobby.bannedItems.length) {
+    if (lobby.turnNo == 7) {
       // Switch to pick phase and turn to team A
       lobby.phase = 'pick';
       lobby.turn = 'teamA';
       // Attach turnClientId to 1st player in team A
       lobby.turnClientId = lobby.teamA[0].id;
+      this.io.to(payload.id).emit('startPickPhase', lobby.turn);
+      return;
+    } else if (lobby.turnNo == 18) {
+      // Switch to pick phase and turn to team A
+      lobby.phase = 'pick';
+      lobby.turn = 'teamB';
+      // Attach turnClientId to 1st player in team A
+      lobby.turnClientId = lobby.teamB[3].id;
       this.io.to(payload.id).emit('startPickPhase', lobby.turn);
       return;
     }
@@ -238,6 +270,8 @@ export class EventsGateway
     lobby = this.switchTurn(lobby);
     lobby.pickedItems.push(payload.item);
 
+    let user = lobby.teamA.find((user) => user.id === client.id);
+    user.picked = payload.item;
     // Emit the picked item to the lobby
     this.io.to(payload.id).emit('pickItem', payload.item);
 
@@ -246,6 +280,17 @@ export class EventsGateway
       lobby.started = false;
       lobby.phase = 'done';
       this.io.to(payload.id).emit('lobbyDone', lobby);
+      return;
+    }
+
+    // Check if all bans are done and switch to pick phase
+    if (lobby.turnNo == 13) {
+      // Switch to pick phase and turn to team A
+      lobby.phase = 'ban';
+      lobby.turn = 'teamB';
+      // Attach turnClientId to 1st player in team A
+      lobby.turnClientId = lobby.teamA[0].id;
+      this.io.to(payload.id).emit('startBanPhase', lobby.turn);
       return;
     }
 
@@ -267,10 +312,48 @@ export class EventsGateway
   // ---------------------------------------------- //
 
   // ----------------- SWITCH TURN LOGIC ----------------- //
-
+  // implement logic per game to switch turns
   switchTurn(lobby: Lobby) {
-    lobby.turn = lobby.turn === 'teamA' ? 'teamB' : 'teamA';
-    lobby.turnClientId = lobby[lobby.turn + '_Captain'].id;
+    lobby.turnNo += 1;
+    switch (lobby.game) {
+      case 'League Of Legends':
+        if (lobby.phase === 'pick') {
+          if (
+            lobby.turnNo === 7 ||
+            lobby.turnNo === 10 ||
+            lobby.turnNo === 11 ||
+            lobby.turnNo === 18 ||
+            lobby.turnNo === 19
+          ) {
+            lobby.turn = 'teamA';
+            // returns undefined because test only includes 1 player per team
+            // needs testing with 5v5
+            console.log(lobby.teamA.find((e) => !e.picked));
+            lobby.turnClientId = lobby.teamA.find((e) => !e.picked).id;
+          } else {
+            lobby.turn = 'teamB';
+            console.log(lobby.teamB.find((e) => !e.picked));
+            lobby.turnClientId = lobby.teamB.find((e) => !e.picked).id;
+          }
+        } else {
+          lobby.turn = lobby.turn === 'teamA' ? 'teamB' : 'teamA';
+          lobby.turnClientId = lobby[lobby.turn + '_Captain'].id;
+        }
+        break;
+      case 'Valorant':
+        // not yet implemented
+        break;
+
+      case 'Counter Strike: Global Offensive':
+        // not yet implemented
+        break;
+
+      default:
+        this.resetLobby(lobby);
+        this.io.to(lobby.id).emit('error', 'Game not found');
+        break;
+    }
+
     lobby.turnStartedAt = new Date();
     // lobby ends after startedAt + 30 seconds
     lobby.turnEndsAt = new Date(lobby.turnStartedAt.getTime() + 30000);
@@ -305,7 +388,7 @@ export class EventsGateway
 
         lobby.bannedItems.push({
           name: 'Not selected',
-          image: '',
+          avatarUrl: '',
         });
         let _lobby = this.switchTurn(lobby);
 
@@ -331,8 +414,8 @@ export class EventsGateway
     lobby.turnEndsAt = null;
     lobby.pickedItems = [];
     lobby.bannedItems = [];
+    lobby.turnNo = 1;
     return lobby;
-    // this.io.to(lobby.id).emit('resetLobby', lobby);
   }
 
   // ----------------- LOBBY CONTROLS ----------------- //
@@ -365,14 +448,14 @@ export class EventsGateway
     //  Not yet implemented
 
     // Check if item is already picked
-    if (lobby.pickedItems.find((e) => e.name === itemId)) {
-      return 'Item already picked';
-    }
+    // if (lobby.pickedItems.find((e) => e.name === itemId)) {
+    //   return 'Item already picked';
+    // }
 
-    // Check if item is banned
-    if (lobby.bannedItems.find((e) => e.name === itemId)) {
-      return 'Item is banned';
-    }
+    // // Check if item is banned
+    // if (lobby.bannedItems.find((e) => e.name === itemId)) {
+    //   return 'Item is banned';
+    // }
 
     return null;
   }

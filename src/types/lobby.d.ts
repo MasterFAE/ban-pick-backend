@@ -7,6 +7,7 @@ export type Lobby = {
   teamSize: number;
   pickSize: number;
   banSize: number;
+  game: string;
   map: string;
   mode: string;
   password: string;
@@ -23,4 +24,5 @@ export type Lobby = {
   turnEndsAt: Date;
   turnClientId: string;
   started: boolean;
+  turnNo?: number;
 };
