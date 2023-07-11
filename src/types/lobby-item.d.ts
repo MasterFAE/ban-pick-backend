@@ -1,4 +1,4 @@
 export type LobbyItem = {
   name: string;
-  image: string;
+  avatarUrl: string;
 };
