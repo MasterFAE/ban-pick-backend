@@ -25,4 +25,5 @@ export type Lobby = {
   turnClientId: string;
   started: boolean;
   turnNo?: number;
+  simulation?: boolean;
 };

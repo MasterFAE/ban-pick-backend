@@ -1,4 +1,4 @@
-## Pick & Ban App - Back End
+## Ban & Pick App - Back End
 
 This is a backend application for a competitive game lobby system, designed for League of Legends, CS:GO, and Valorant. The application provides features for banning and selecting characters or maps in a competitive game setting. It is built using TypeScript, Socket.IO, and NestJS.
 

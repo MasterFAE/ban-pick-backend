@@ -51,16 +51,17 @@ export class EventsGateway
     * Functional:
       * Lobby password hashing
       * Pick and ban item control according to game mode and name
-      * Lobby pick/ban time control
-      * When switching sides lobby must be started: false
       * When switching sides team captains must be changed if switching user is the captain
       * When captain switches side change captain of the other team
       * Team switching only be available when lobby is started: false
-      * Check if user is in the lobby before banning/picking
-
+      [x] Lobby pick/ban time control
+      [x] Check if user is in the lobby before banning/picking
+      [x] Need a simulation mode: 
+        - For example, in League Of Legends lobby if simulation mode is on,
+          teams will be filled with made-up players like {id: 1, username: 'Player 1'}, {id: 2, username: 'Player 2'} etc.  
+        - And user will decide every pick and ban by switching sides?
 
   */
-
   @SubscribeMessage('createLobby')
   handleNewLobby(
     client,
@@ -72,6 +73,7 @@ export class EventsGateway
       map: string;
       mode: string;
       password: string;
+      simulation: boolean;
     },
   ) {
     let lobby: any = {
@@ -153,6 +155,11 @@ export class EventsGateway
       return;
     }
 
+    if (lobby.simulation) {
+      client.emit('error', 'Simulation mode is on');
+      return;
+    }
+
     let user: LobbyUser = { id: client.id, username: payload.userName };
     // Distribute users to teams
     if (lobby.teamA.length > lobby.teamB.length) {
@@ -189,13 +196,14 @@ export class EventsGateway
       client.emit('error', 'Lobby already started');
       return;
     }
-    if (lobby.teamA.length !== lobby.teamB.length) {
+    if (lobby.teamA.length !== lobby.teamB.length && !lobby.simulation) {
       client.emit('error', 'Teams are not equal');
       return;
     }
     // Reset lobby
     this.resetLobby(lobby);
 
+    // LOGIC: Set lobby options
     lobby.started = true;
     lobby.phase = 'ban';
     lobby.turn = 'teamA';
@@ -203,6 +211,24 @@ export class EventsGateway
     lobby.turnStartedAt = new Date();
     // lobby ends after startedAt + 30 seconds
     lobby.turnEndsAt = new Date(lobby.turnStartedAt.getTime() + 30000);
+
+    // Simulation mode, fill teams with made-up players
+    if (lobby.simulation) {
+      lobby.teamA = [];
+      lobby.teamB = [];
+      for (let i = 0; i < lobby.teamSize; i++) {
+        let randomName = i + Math.floor(Math.random() * 100);
+
+        lobby.teamA.push({
+          id: 'A_sim_player' + randomName,
+          username: 'A Team Player ' + randomName,
+        });
+        lobby.teamB.push({
+          id: 'B_sim_player' + randomName,
+          username: 'B Team Player ' + randomName,
+        });
+      }
+    }
 
     this.io.to(payload.id).emit('startPickBan', lobby.turn);
   }
@@ -237,15 +263,15 @@ export class EventsGateway
       lobby.phase = 'pick';
       lobby.turn = 'teamA';
       // Attach turnClientId to 1st player in team A
-      lobby.turnClientId = lobby.teamA[0].id;
+      lobby.turnClientId = lobby.simulation ? lobby.adminId : lobby.teamA[0].id;
       this.io.to(payload.id).emit('startPickPhase', lobby.turn);
       return;
-    } else if (lobby.turnNo == 18) {
+    } else if (lobby.turnNo == 17) {
       // Switch to pick phase and turn to team A
       lobby.phase = 'pick';
       lobby.turn = 'teamB';
       // Attach turnClientId to 1st player in team A
-      lobby.turnClientId = lobby.teamB[3].id;
+      lobby.turnClientId = lobby.simulation ? lobby.adminId : lobby.teamB[3].id;
       this.io.to(payload.id).emit('startPickPhase', lobby.turn);
       return;
     }
@@ -267,16 +293,37 @@ export class EventsGateway
       return;
     }
 
+    // Check if all bans are done
+    if (lobby.pickSize * 2 <= lobby.pickedItems.length) {
+      client.emit('error', 'All picks are done');
+      return;
+    }
+    if (lobby.phase !== 'pick') {
+      client.emit('error', 'Pick phase is over');
+      return;
+    }
+
+    // decide which team to pick
+    let team = lobby.turn === 'teamA' ? lobby.teamA : lobby.teamB;
+
+    // Switch turn
     lobby = this.switchTurn(lobby);
+
+    // Add picked item to lobby
     lobby.pickedItems.push(payload.item);
 
-    let user = lobby.teamA.find((user) => user.id === client.id);
+    // Find the user who picked the item
+    // Or if in simulation mode, find the user who has not picked yet
+    let user = lobby.simulation
+      ? team.find((user) => !user.picked)
+      : team.find((user) => user.id === client.id);
     user.picked = payload.item;
+
     // Emit the picked item to the lobby
     this.io.to(payload.id).emit('pickItem', payload.item);
 
     // Check if all picks are done and lobby is done
-    if (lobby.pickSize === lobby.pickedItems.length) {
+    if (lobby.pickSize * 2 === lobby.pickedItems.length) {
       lobby.started = false;
       lobby.phase = 'done';
       this.io.to(payload.id).emit('lobbyDone', lobby);
@@ -289,7 +336,9 @@ export class EventsGateway
       lobby.phase = 'ban';
       lobby.turn = 'teamB';
       // Attach turnClientId to 1st player in team A
-      lobby.turnClientId = lobby.teamA[0].id;
+      lobby.turnClientId = lobby.simulation
+        ? lobby.adminId
+        : lobby.teamB_Captain.id;
       this.io.to(payload.id).emit('startBanPhase', lobby.turn);
       return;
     }
@@ -328,16 +377,21 @@ export class EventsGateway
             lobby.turn = 'teamA';
             // returns undefined because test only includes 1 player per team
             // needs testing with 5v5
-            console.log(lobby.teamA.find((e) => !e.picked));
-            lobby.turnClientId = lobby.teamA.find((e) => !e.picked).id;
+            // Simulation mode condition
+            lobby.turnClientId = lobby.simulation
+              ? lobby.adminId
+              : lobby.teamA.find((e) => !e.picked).id;
           } else {
             lobby.turn = 'teamB';
-            console.log(lobby.teamB.find((e) => !e.picked));
-            lobby.turnClientId = lobby.teamB.find((e) => !e.picked).id;
+            lobby.turnClientId = lobby.simulation
+              ? lobby.adminId
+              : lobby.teamB.find((e) => !e.picked).id;
           }
         } else {
           lobby.turn = lobby.turn === 'teamA' ? 'teamB' : 'teamA';
-          lobby.turnClientId = lobby[lobby.turn + '_Captain'].id;
+          lobby.turnClientId = lobby.simulation
+            ? lobby.adminId
+            : lobby[lobby.turn + '_Captain'].id;
         }
         break;
       case 'Valorant':
@@ -428,7 +482,8 @@ export class EventsGateway
     // Check if user is in the lobby
     if (
       !lobby.teamA.find((e) => e.id === clientId) &&
-      !lobby.teamB.find((e) => e.id === clientId)
+      !lobby.teamB.find((e) => e.id === clientId) &&
+      clientId !== lobby.adminId
     ) {
       return 'User not in lobby';
     }
@@ -440,7 +495,12 @@ export class EventsGateway
 
     //  Check lobby turn
     let team = lobby.teamA.find((e) => e.id === clientId) ? 'teamA' : 'teamB';
-    if (lobby.turn !== team || lobby.turnClientId !== clientId) {
+    if (
+      (lobby.turn !== team || lobby.turnClientId !== clientId) &&
+      // Simulation mode condition
+      lobby.simulation &&
+      clientId !== lobby.adminId
+    ) {
       return 'Not your turn';
     }
 
