@@ -39,21 +39,22 @@ export class EventsGateway
     TODO: 
 
     * Actions:
-      * New lobby
-      * Join lobby
+      [x] New lobby
+      [x] Join lobby
       * Leave lobby
       * Delete Lobby
-      * Start Pick&Ban
-      * Ban Item
-      * Pick Item
-      * Switch Sides
+      [x] Start Pick&Ban
+      [x] Ban Item
+      [x] Pick Item
+      [x] Switch Sides
 
     * Functional:
       * Lobby password hashing
       * Pick and ban item control according to game mode and name
-      * When switching sides team captains must be changed if switching user is the captain
-      * When captain switches side change captain of the other team
-      * Team switching only be available when lobby is started: false
+      * Valorant map ban logic
+      * CS:GO map ban logic
+      [x] When switching sides team captains must be changed if switching user is the captain
+      [x] Team switching only be available when lobby is started: false
       [x] Lobby pick/ban time control
       [x] Check if user is in the lobby before banning/picking
       [x] Need a simulation mode: 
@@ -349,6 +350,52 @@ export class EventsGateway
       turnClientId: lobby.turnClientId,
     });
   }
+
+  @SubscribeMessage('switchSide')
+  handleSwitchSide(client, payload: { id: string }) {
+    let lobby = this.lobbies.find((lobby) => lobby.id === payload.id);
+    if (!lobby) {
+      client.emit('error', 'Lobby Not Found');
+      return;
+    }
+
+    if (lobby.started) {
+      client.emit('error', 'Lobby already started');
+      return;
+    }
+
+    // Find user's team and other team
+    let userTeam = lobby.teamA.find((user) => {
+      user.id === client.id;
+    })
+      ? 'teamA'
+      : 'teamB';
+    let otherTeam = userTeam === 'teamA' ? 'teamB' : 'teamA';
+
+    // Check if other team is full
+    if (lobby[otherTeam].length == lobby.teamSize) {
+      client.emit('error', 'Other team is full');
+      return;
+    }
+
+    // Find user
+    let _user = lobby[userTeam].find((user) => user.id === client.id);
+
+    // Switch team
+    lobby[userTeam].filter((user) => {
+      return user.id !== client.id;
+    });
+    lobby[otherTeam].push(_user);
+
+    // Check if user is captain
+    if (lobby[userTeam + '_Captain'].id === client.id) {
+      lobby[userTeam + '_Captain'] = lobby[userTeam][0];
+    }
+
+    // Emit the lobby to the lobby
+    this.io.to(payload.id).emit('updateLobby', lobby);
+  }
+
   // TEST ITEM WILL BE DELETED
   @SubscribeMessage('getlobby')
   handleGetLobby(client, payload: { id: string }) {
@@ -512,7 +559,7 @@ export class EventsGateway
     //   return 'Item already picked';
     // }
 
-    // // Check if item is banned
+    // Check if item is banned
     // if (lobby.bannedItems.find((e) => e.name === itemId)) {
     //   return 'Item is banned';
     // }

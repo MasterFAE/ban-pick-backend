@@ -20,7 +20,7 @@ This is a backend application for a competitive game lobby system, designed for 
   - At the last pick phase ordered with:
     - 1st and 4th picks belongs to Team B
     - 2nd and 3rd picks belongs to Team A
-  - In the end, both of the teams banned 5 and picked 5 unique champions.
+  - In the end, both of the teams ban 5 and pick 5 unique champions.
 
   Source: [TCL - Turkish Championship League](https://liquipedia.net/leagueoflegends/TCL)
 
