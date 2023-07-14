@@ -53,6 +53,10 @@ export class EventsGateway
       * Pick and ban item control according to game mode and name
       * Valorant map ban logic
       * CS:GO map ban logic
+      * Saving drafts
+      * Simulation mode should include coach vs coach
+        - Basically same methods but 1v1 and again fulfill the teams with made-up players
+        
       [x] When switching sides team captains must be changed if switching user is the captain
       [x] Team switching only be available when lobby is started: false
       [x] Lobby pick/ban time control
